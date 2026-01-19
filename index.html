@@ -20,6 +20,15 @@
     .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
     input[type="date"] { padding: 8px 10px; }
     .status { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa; }
+    .nav-btn {
+      padding: 8px 12px;
+      font-size: 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .nav-btn:hover { background: #f0f0f0; }
 
     .grid-wrap {
       overflow: auto;
@@ -205,7 +214,9 @@
 
 <div class="bar">
   <label for="date">Date:</label>
+  <button id="prevDay" class="nav-btn">◀</button>
   <input id="date" type="date" />
+  <button id="nextDay" class="nav-btn">▶</button>
   <span id="status" class="status">Idle</span>
 </div>
 
@@ -457,6 +468,22 @@
   dateEl.addEventListener("change", () => {
     if (!dateEl.value) return;
     scheduleLoad(dateEl.value);
+  });
+
+  document.getElementById("prevDay").addEventListener("click", () => {
+    const current = new Date(dateEl.value + "T12:00:00");
+    current.setDate(current.getDate() - 1);
+    const newISO = `${current.getFullYear()}-${pad2(current.getMonth() + 1)}-${pad2(current.getDate())}`;
+    dateEl.value = newISO;
+    scheduleLoad(newISO);
+  });
+
+  document.getElementById("nextDay").addEventListener("click", () => {
+    const current = new Date(dateEl.value + "T12:00:00");
+    current.setDate(current.getDate() + 1);
+    const newISO = `${current.getFullYear()}-${pad2(current.getMonth() + 1)}-${pad2(current.getDate())}`;
+    dateEl.value = newISO;
+    scheduleLoad(newISO);
   });
 
   loadDay(todayISO);
