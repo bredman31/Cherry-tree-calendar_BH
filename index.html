@@ -16,6 +16,16 @@
     .top { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
     .top h2 { margin: 0; }
     .top .dateTitle { font-weight: 700; font-size: 18px; }
+    .booking-link {
+      padding: 6px 12px;
+      background: #0F9D8A;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .booking-link:hover { background: #0d8a79; }
 
     .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
     input[type="date"] { padding: 8px 10px; }
@@ -210,6 +220,7 @@
 <div class="top">
   <h2>Cherry Tree Centre</h2>
   <div class="dateTitle" id="dateTitle"></div>
+  <a href="https://cherrytreetherapycentre.simplybook.it/v2/" target="_blank" class="booking-link">Make a Booking</a>
 </div>
 
 <div class="bar">
@@ -436,15 +447,29 @@
   }
 
   let loadTimer = null;
+  let lastLoadTime = 0;
+  const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
   function scheduleLoad(dayISO) {
     if (loadTimer) clearTimeout(loadTimer);
     loadTimer = setTimeout(() => loadDay(dayISO), 150);
   }
 
+  // Auto-refresh when returning to page after 5 minutes
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      const now = Date.now();
+      if (now - lastLoadTime > REFRESH_INTERVAL) {
+        loadDay(dateEl.value);
+      }
+    }
+  });
+
   async function loadDay(dayISO) {
     setStatus("Loading…");
     setDateTitle(dayISO);
     renderStructure();
+    lastLoadTime = Date.now();
 
     for (let i = 0; i < ROOMS.length; i++) {
       const room = ROOMS[i];
