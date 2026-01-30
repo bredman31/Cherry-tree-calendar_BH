@@ -1,1 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Cherry Tree — Day Grid</title>
+  <style>
+    :root {
+      --time-col-w: 60px;
+      --room-col-w: 200px;
+      --slot-h: 20px; /* height per 15-min slot */
+    }
 
+    body { margin: 12px; font-family: Arial, sans-serif; }
+
+    .top { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+    .top h2 { margin: 0; }
+    .top .dateTitle { font-weight: 700; font-size: 18px; }
+    .booking-link {
+      padding: 6px 12px;
+      background: #0F9D8A;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .booking-link:hover { background: #0d8a79; }
+
+    .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    input[type="date"] { padding: 8px 10px; }
+    .status { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa; }
+    .nav-btn {
+      padding: 8px 12px;
+      font-size: 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .nav-btn:hover { background: #f0f0f0; }
+
+    .grid-wrap {
+      overflow: auto;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      -webkit-overflow-scrolling: touch;
+      max-height: calc(100vh - 120px);
+    }
+
+    .day-grid {
+      display: flex;
+      min-width: calc(var(--time-col-w) + (8 * var(--room-col-w)));
+    }
+
+    /* Time column */
+    .time-column {
+      width: var(--time-col-w);
+      flex-shrink: 0;
+      background: #fff;
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      border-right: 1px solid #ddd;
+      box-sizing: border-box;
+    }
+
+    .time-slot {
+      height: var(--slot-h);
+      box-sizing: border-box;
+      border-bottom: 1px solid #f0f0f0;
+      padding: 0 6px;
+      font-size: 12px;
+      color: #999;
+      display: flex;
+      align-items: center;
+    }
+
+    .time-slot.hour {
+      color: #333;
+      font-weight: 600;
+      border-top: 2px solid #bbb;
+    }
+
+    /* Room columns */
+    .room-column {
+      width: var(--room-col-w);
+      flex-shrink: 0;
+      position: relative;
+      border-right: 1px solid #eee;
+      box-sizing: border-box;
+      background: 
+        repeating-linear-gradient(
+          to bottom,
+          #fff 0px,
+          #fff calc(var(--slot-h) * 4 - 1px),
+          #f5f5f5 calc(var(--slot-h) * 4 - 1px),
+          #f5f5f5 calc(var(--slot-h) * 4)
+        );
+    }
+
+    .room-column:nth-child(odd) {
+      background: 
+        repeating-linear-gradient(
+          to bottom,
+          #fcfcfc 0px,
+          #fcfcfc calc(var(--slot-h) * 4 - 1px),
+          #f0f0f0 calc(var(--slot-h) * 4 - 1px),
+          #f0f0f0 calc(var(--slot-h) * 4)
+        );
+    }
+
+    /* Header row */
+    .header-row {
+      display: flex;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: #fff;
+      border-bottom: 2px solid #ddd;
+      min-width: calc(var(--time-col-w) + (8 * var(--room-col-w)));
+    }
+
+    .header-cell {
+      padding: 10px 6px;
+      font-weight: 600;
+      text-align: center;
+      box-sizing: border-box;
+      border-right: 1px solid #eee;
+      flex-shrink: 0;
+    }
+
+    .header-cell.time {
+      width: var(--time-col-w);
+      position: sticky;
+      left: 0;
+      background: #fff;
+      z-index: 21;
+    }
+
+    .header-cell.room {
+      width: var(--room-col-w);
+    }
+
+    /* Events */
+    .evt {
+      position: absolute;
+      left: 0;
+      right: 0;
+      padding: 4px 6px;
+      color: #fff;
+      border: 1px solid rgba(0,0,0,0.3);
+      border-radius: 0;
+      overflow: hidden;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .evt .t {
+      font-weight: 600;
+      font-size: 11px;
+      line-height: 1.3;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .evt .m {
+      font-size: 10px;
+      opacity: 0.9;
+    }
+
+    /* Grid lines overlay for room columns */
+    .grid-lines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+    }
+
+    .grid-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #e8e8e8;
+    }
+
+    .grid-line.hour {
+      height: 2px;
+      background: #bbb;
+    }
+
+    @media (max-width: 1100px) {
+      :root {
+        --room-col-w: 120px;
+        --time-col-w: 50px;
+      }
+      .header-cell { 
+        font-size: 12px; 
+        padding: 8px 4px;
+      }
+      .evt .t { font-size: 10px; }
+      .evt .m { font-size: 9px; }
+    }
+
+    @media (max-width: 900px) {
+      :root {
+        --room-col-w: 95px;
+        --time-col-w: 45px;
+      }
+      .header-cell { 
+        font-size: 11px; 
+        padding: 6px 3px;
+      }
+      .evt .t { 
+        font-size: 9px;
+        white-space: normal;
+        word-wrap: break-word;
+      }
+      .evt .m { display: none; }
+      .time-slot { font-size: 10px; }
+    }
+
+    @media (max-width: 700px) {
+      body { margin: 8px; }
+      :root {
+        --room-col-w: 100px;
+        --time-col-w: 50px;
+        --slot-h: 18px;
+      }
+      .evt .t { 
+        font-size: 10px; 
+        white-space: normal;
+        word-wrap: break-word;
+      }
+      .evt .m { display: none; }
+      .header-cell { 
+        font-size: 11px; 
+        padding: 8px 4px;
+      }
+      .time-slot { font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="top">
+  <h2>Cherry Tree Centre</h2>
+  <div class="dateTitle" id="dateTitle"></div>
+</div>
+
+<div class="bar">
+  <label for="date">Date:</label>
+  <button id="prevDay" class="nav-btn">◀</button>
+  <input id="date" type="date" />
+  <button id="nextDay" class="nav-btn">▶</button>
+  <span id="status" class="status">Idle</span>
+</div>
+
+<div class="grid-wrap">
+  <div class="header-row" id="headerRow"></div>
+  <div class="day-grid" id="dayGrid"></div>
+</div>
+
+
+
+<script>
+  const API_KEY = "AIzaSyAv_hwidrFDlxCBBJgErwaApPKSOLTGUSQ";
+  const TZ = "Europe/London";
+  const START_HOUR = 8;
+  const END_HOUR = 22;
+  const SLOTS_PER_HOUR = 4;
+  const TOTAL_SLOTS = (END_HOUR - START_HOUR) * SLOTS_PER_HOUR; // 56 slots
+
+  const ROOMS = [
+    { name: "Massage Room", id: "h1svvbfk52i227j1vjuvk7c3d4@group.calendar.google.com", color: "#A06A86" },
+    { name: "Room 1",       id: "oehotcbnt0ntd1ncstfi8i1c60@group.calendar.google.com", color: "#0F9D8A" },
+    { name: "Room 3",       id: "mnqbqal695n2jfhsgaf8hc6jqk@group.calendar.google.com", color: "#E0B12D" },
+    { name: "Room 5",       id: "4f68dfdd654856388514ee43864ae2d5c91a230d0ea7a7128331c7dcfa803c06@group.calendar.google.com", color: "#D23B3B" },
+    { name: "Room 6",       id: "aft9c58esii6jf15j7pajr2do0@group.calendar.google.com", color: "#7A6A58" },
+    { name: "Room 7",       id: "slu3m2a126k818ug21io7qom3g@group.calendar.google.com", color: "#1296D8" },
+    { name: "Room 8",       id: "en86v45moafcqt1vu024du1pl4@group.calendar.google.com", color: "#EF7D7D" },
+    { name: "Garden Room",  id: "ro178gg8i62qb56vnhgk659ch4@group.calendar.google.com", color: "#B796E6" }
+  ];
+
+  const statusEl = document.getElementById("status");
+  const dayGridEl = document.getElementById("dayGrid");
+  const headerRowEl = document.getElementById("headerRow");
+  const dateEl = document.getElementById("date");
+  const dateTitleEl = document.getElementById("dateTitle");
+
+  function setStatus(msg) { statusEl.textContent = msg; }
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function setDateTitle(dayISO) {
+    const d = new Date(dayISO + "T12:00:00");
+    const txt = new Intl.DateTimeFormat("en-GB", {
+      timeZone: TZ, weekday: "long", day: "2-digit", month: "long", year: "numeric"
+    }).format(d);
+    dateTitleEl.textContent = txt;
+    document.title = "Cherry Tree — " + txt;
+  }
+
+  function getSlotHeight() {
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--slot-h')) || 20;
+  }
+
+  function renderStructure() {
+    // Header row
+    headerRowEl.innerHTML = '';
+    
+    const timeHeader = document.createElement('div');
+    timeHeader.className = 'header-cell time';
+    timeHeader.textContent = 'Time';
+    headerRowEl.appendChild(timeHeader);
+
+    ROOMS.forEach(room => {
+      const cell = document.createElement('div');
+      cell.className = 'header-cell room';
+      cell.textContent = room.name;
+      headerRowEl.appendChild(cell);
+    });
+
+    // Day grid
+    dayGridEl.innerHTML = '';
+
+    // Time column
+    const timeCol = document.createElement('div');
+    timeCol.className = 'time-column';
+
+    for (let slot = 0; slot < TOTAL_SLOTS; slot++) {
+      const hour = START_HOUR + Math.floor(slot / SLOTS_PER_HOUR);
+      const quarter = slot % SLOTS_PER_HOUR;
+
+      const timeSlot = document.createElement('div');
+      timeSlot.className = 'time-slot' + (quarter === 0 ? ' hour' : '');
+      
+      if (quarter === 0) {
+        timeSlot.textContent = `${pad2(hour)}:00`;
+      }
+      
+      timeCol.appendChild(timeSlot);
+    }
+
+    dayGridEl.appendChild(timeCol);
+
+    // Room columns
+    ROOMS.forEach((room, idx) => {
+      const col = document.createElement('div');
+      col.className = 'room-column';
+      col.dataset.room = idx;
+
+      // Add grid lines
+      const gridLines = document.createElement('div');
+      gridLines.className = 'grid-lines';
+
+      const slotH = getSlotHeight();
+      for (let slot = 0; slot < TOTAL_SLOTS; slot++) {
+        const line = document.createElement('div');
+        line.className = 'grid-line' + (slot % SLOTS_PER_HOUR === 0 ? ' hour' : '');
+        line.style.top = (slot * slotH) + 'px';
+        gridLines.appendChild(line);
+      }
+
+      col.appendChild(gridLines);
+      dayGridEl.appendChild(col);
+    });
+
+    // Set total height
+    const totalHeight = TOTAL_SLOTS * getSlotHeight();
+    document.querySelectorAll('.room-column').forEach(col => {
+      col.style.height = totalHeight + 'px';
+    });
+  }
+
+  function fmtTime(d) {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false
+    }).format(d);
+  }
+
+  function londonHM(d) {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false
+    }).formatToParts(d);
+    const hh = parseInt(parts.find(p => p.type === "hour").value, 10);
+    const mm = parseInt(parts.find(p => p.type === "minute").value, 10);
+    return { hh, mm };
+  }
+
+  function parseEventDate(obj, dayISO) {
+    if (obj && obj.dateTime) return new Date(obj.dateTime);
+    if (obj && obj.date) return new Date(dayISO + "T00:00:00");
+    return new Date(dayISO + "T00:00:00");
+  }
+
+  async function fetchEvents(calendarId, dayISO) {
+    const timeMin = new Date(dayISO + "T00:00:00.000Z");
+    const timeMax = new Date(timeMin);
+    timeMax.setUTCDate(timeMax.getUTCDate() + 1);
+
+    const url =
+      "https://www.googleapis.com/calendar/v3/calendars/" +
+      encodeURIComponent(calendarId) +
+      "/events?key=" + encodeURIComponent(API_KEY) +
+      "&timeMin=" + encodeURIComponent(timeMin.toISOString()) +
+      "&timeMax=" + encodeURIComponent(timeMax.toISOString()) +
+      "&singleEvents=true&orderBy=startTime&maxResults=250";
+
+    const res = await fetch(url);
+    const text = await res.text();
+    if (!res.ok) return { ok: false, status: res.status, body: text, url };
+
+    let data;
+    try { data = JSON.parse(text); }
+    catch (e) { return { ok: false, status: res.status, body: text, url, parseError: e.message }; }
+
+    return { ok: true, items: data.items || [], url };
+  }
+
+  function placeEvents(roomIndex, dayISO, items, roomColor) {
+    const col = dayGridEl.querySelector(`.room-column[data-room="${roomIndex}"]`);
+    if (!col) return;
+
+    const slotH = getSlotHeight();
+    const windowStartMin = START_HOUR * 60;
+    const windowEndMin = END_HOUR * 60;
+
+    items.forEach(item => {
+      if (item.status === "cancelled") return;
+      // Skip all-day events
+      if (item.start && item.start.date && !item.start.dateTime) return;
+
+      const start = parseEventDate(item.start, dayISO);
+      const end = parseEventDate(item.end, dayISO);
+
+      const s = londonHM(start);
+      const e = londonHM(end);
+
+      const startTotalMin = s.hh * 60 + s.mm;
+      const endTotalMin = e.hh * 60 + e.mm;
+
+      // Clamp to visible window
+      const clampedStart = Math.max(windowStartMin, startTotalMin);
+      const clampedEnd = Math.min(windowEndMin, endTotalMin);
+      if (clampedEnd <= clampedStart) return;
+
+      // Calculate position
+      const startSlot = (clampedStart - windowStartMin) / 15;
+      const durationSlots = (clampedEnd - clampedStart) / 15;
+
+      const topPx = startSlot * slotH;
+      const heightPx = durationSlots * slotH;
+
+      const title = item.summary || "(no title)";
+      const meta = `${fmtTime(start)} – ${fmtTime(end)}`;
+
+      const evt = document.createElement('div');
+      evt.className = 'evt';
+      evt.style.top = topPx + 'px';
+      evt.style.height = heightPx + 'px';
+      evt.style.background = roomColor;
+      evt.innerHTML = `<div class="t">${escapeHtml(title)}</div><div class="m">${escapeHtml(meta)}</div>`;
+
+      col.appendChild(evt);
+    });
+  }
+
+  let loadTimer = null;
+  let lastLoadTime = 0;
+  const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+  function scheduleLoad(dayISO) {
+    if (loadTimer) clearTimeout(loadTimer);
+    loadTimer = setTimeout(() => loadDay(dayISO), 150);
+  }
+
+  // Auto-refresh when returning to page after 5 minutes
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      const now = Date.now();
+      if (now - lastLoadTime > REFRESH_INTERVAL) {
+        loadDay(dateEl.value);
+      }
+    }
+  });
+
+  async function loadDay(dayISO) {
+    setStatus("Loading…");
+    setDateTitle(dayISO);
+    renderStructure();
+    lastLoadTime = Date.now();
+
+    for (let i = 0; i < ROOMS.length; i++) {
+      const room = ROOMS[i];
+      setStatus(`Loading ${room.name} (${i + 1}/${ROOMS.length})…`);
+
+      const r = await fetchEvents(room.id, dayISO);
+      if (!r.ok) {
+        continue;
+      }
+
+      placeEvents(i, dayISO, r.items, room.color);
+    }
+
+    setStatus("Done");
+  }
+
+  const now = new Date();
+  const todayISO = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  dateEl.value = todayISO;
+
+  dateEl.addEventListener("change", () => {
+    if (!dateEl.value) return;
+    scheduleLoad(dateEl.value);
+  });
+
+  document.getElementById("prevDay").addEventListener("click", () => {
+    const current = new Date(dateEl.value + "T12:00:00");
+    current.setDate(current.getDate() - 1);
+    const newISO = `${current.getFullYear()}-${pad2(current.getMonth() + 1)}-${pad2(current.getDate())}`;
+    dateEl.value = newISO;
+    scheduleLoad(newISO);
+  });
+
+  document.getElementById("nextDay").addEventListener("click", () => {
+    const current = new Date(dateEl.value + "T12:00:00");
+    current.setDate(current.getDate() + 1);
+    const newISO = `${current.getFullYear()}-${pad2(current.getMonth() + 1)}-${pad2(current.getDate())}`;
+    dateEl.value = newISO;
+    scheduleLoad(newISO);
+  });
+
+  loadDay(todayISO);
+</script>
+
+</body>
+</html>
