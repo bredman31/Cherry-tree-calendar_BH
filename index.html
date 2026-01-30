@@ -194,6 +194,37 @@
       background: #bbb;
     }
 
+    @media (max-width: 1100px) {
+      :root {
+        --room-col-w: 120px;
+        --time-col-w: 50px;
+      }
+      .header-cell { 
+        font-size: 12px; 
+        padding: 8px 4px;
+      }
+      .evt .t { font-size: 10px; }
+      .evt .m { font-size: 9px; }
+    }
+
+    @media (max-width: 900px) {
+      :root {
+        --room-col-w: 95px;
+        --time-col-w: 45px;
+      }
+      .header-cell { 
+        font-size: 11px; 
+        padding: 6px 3px;
+      }
+      .evt .t { 
+        font-size: 9px;
+        white-space: normal;
+        word-wrap: break-word;
+      }
+      .evt .m { display: none; }
+      .time-slot { font-size: 10px; }
+    }
+
     @media (max-width: 700px) {
       body { margin: 8px; }
       :root {
