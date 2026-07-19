@@ -30,6 +30,12 @@ FILM_MARKER = "odyssey"
 DAYS_AHEAD_TO_CHECK = 21
 TIME_PATTERN = re.compile(r"\d{1,2}:\d{2}\s*(am|pm)", re.IGNORECASE)
 
+# flicks.co.uk has repeatedly (and consistently, across separate hourly
+# runs, so not just a one-off glitch) shown these dates as on sale when
+# odeon.co.uk's own site - checked directly - does not. Excluded until
+# there's reason to believe the source has corrected itself.
+KNOWN_BAD_DATES = {"2026-08-02"}
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 STATE_PATH = REPO_ROOT / "data" / "odyssey_dates.json"
 SCREENSHOT_PATH = REPO_ROOT / "data" / "last_error.png"
@@ -310,7 +316,7 @@ def main() -> int:
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     try:
-        current_dates = scrape_available_dates()
+        current_dates = [d for d in scrape_available_dates() if d not in KNOWN_BAD_DATES]
     except Exception:
         error_text = traceback.format_exc()
         print(error_text, file=sys.stderr)
@@ -323,7 +329,10 @@ def main() -> int:
 
     today_str = datetime.date.today().isoformat()
     current_dates = {d for d in current_dates if d >= today_str}
-    previous_dates = {d for d in state.get("available_dates", []) if d >= today_str}
+    previous_dates = {
+        d for d in state.get("available_dates", [])
+        if d >= today_str and d not in KNOWN_BAD_DATES
+    }
     pending_dates = {d for d in state.get("pending_dates", []) if d >= today_str}
 
     newly_seen = current_dates - previous_dates
