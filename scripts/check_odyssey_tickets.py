@@ -30,6 +30,8 @@ TIME_PATTERN = re.compile(r"\b\d{1,2}:\d{2}\b")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 STATE_PATH = REPO_ROOT / "data" / "odyssey_dates.json"
 SCREENSHOT_PATH = REPO_ROOT / "data" / "last_error.png"
+DEBUG_SCREENSHOT_PATH = REPO_ROOT / "data" / "debug_page.png"
+DEBUG_HTML_PATH = REPO_ROOT / "data" / "debug_page.html"
 
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 GITHUB_REPOSITORY = os.environ.get("GITHUB_REPOSITORY")  # "owner/repo"
@@ -134,8 +136,29 @@ def scrape_available_dates() -> list[str]:
         ))
         try:
             page.goto(FILM_URL, wait_until="domcontentloaded", timeout=30000)
+            print(f"Loaded: {page.url!r} title={page.title()!r}")
             accept_cookies(page)
+            try:
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except PlaywrightTimeoutError:
+                print("networkidle wait timed out; continuing anyway")
             page.wait_for_timeout(2000)
+
+            body_text = page.locator("body").inner_text(timeout=5000)
+            print(f"Body text length: {len(body_text)} chars")
+            if any(marker in body_text.lower() for marker in
+                   ["just a moment", "attention required", "checking your browser",
+                    "enable javascript and cookies"]):
+                print("WARNING: page looks like a bot-protection challenge page, not the real content")
+
+            all_clickable = page.locator("button, a, [role=tab], [role=button]")
+            clickable_count = all_clickable.count()
+            sample_texts = [t.strip() for t in all_clickable.all_inner_texts()[:40] if t.strip()]
+            print(f"Found {clickable_count} clickable elements. Sample texts: {sample_texts}")
+
+            DEBUG_SCREENSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(DEBUG_SCREENSHOT_PATH), full_page=True)
+            DEBUG_HTML_PATH.write_text(page.content())
 
             today = datetime.date.today()
             for offset in range(DAYS_AHEAD_TO_CHECK):

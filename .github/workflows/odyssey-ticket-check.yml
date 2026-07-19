@@ -34,12 +34,15 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python scripts/check_odyssey_tickets.py
 
-      - name: Upload debug screenshot on failure
-        if: failure()
+      - name: Upload debug artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: odyssey-checker-debug
-          path: data/last_error.png
+          path: |
+            data/last_error.png
+            data/debug_page.png
+            data/debug_page.html
           if-no-files-found: ignore
 
       - name: Commit updated state
