@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-Checks the ODEON film page for "The Odyssey" and records which dates have
-bookable showings at ODEON Luxe London Leicester Square. When a date shows
-up that wasn't there on the previous run, it means ODEON has just released
-new tickets for that day, and we post a notification to a tracking GitHub
-issue.
+odeon.co.uk blocks automated requests (browser and plain HTTP alike) with
+a Cloudflare challenge, so this scrapes flicks.co.uk's listing for ODEON
+Luxe London Leicester Square instead - confirmed to accurately reflect
+Odeon's real on-sale window (it goes empty past the actual cutoff date,
+not just a generic recurring schedule). Records which dates have bookable
+showings of "The Odyssey"; when a date shows up that wasn't there on the
+previous run, posts a notification to a tracking GitHub issue.
 
 State (the last known set of available dates) is persisted to
 data/odyssey_dates.json and committed back to the repo by the workflow,
@@ -22,10 +24,11 @@ import requests
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-FILM_URL = "https://www.odeon.co.uk/films/the-odyssey-70mm/HO00009035/"
-CINEMA_NAME = "Leicester Square"
+SOURCE_URL = "https://www.flicks.co.uk/cinema/odeon-cinema-luxe-leicester-square/"
+BOOKING_URL = "https://www.odeon.co.uk/films/the-odyssey-70mm/HO00009035/"
+FILM_MARKER = "odyssey"
 DAYS_AHEAD_TO_CHECK = 21
-TIME_PATTERN = re.compile(r"\b\d{1,2}:\d{2}\b")
+TIME_PATTERN = re.compile(r"\d{1,2}:\d{2}\s*(am|pm)", re.IGNORECASE)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 STATE_PATH = REPO_ROOT / "data" / "odyssey_dates.json"
@@ -53,8 +56,6 @@ def date_match_patterns(day: datetime.date) -> list[str]:
     return [
         day.strftime("%a %-d").lower(),        # "fri 24"
         day.strftime("%-d %b").lower(),        # "24 jul"
-        day.strftime("%A %-d %B").lower(),     # "friday 24 july"
-        day.strftime("%-d %B").lower(),        # "24 july"
     ]
 
 
@@ -82,14 +83,13 @@ def find_and_click_date_tab(page, day: datetime.date) -> bool:
     """Try to find a clickable element representing `day` and click it.
     Returns True if a matching tab was found and clicked."""
     patterns = date_match_patterns(day)
-    candidates = page.locator("button, a, [role=tab], [role=button]")
-    count = candidates.count()
+    candidates = page.locator("button, a, [role=tab], [role=button], li")
     texts = candidates.all_inner_texts()
-    for idx in range(min(count, len(texts))):
-        text = (texts[idx] or "").strip().lower()
-        if not text:
+    for idx, text in enumerate(texts):
+        norm = " ".join((text or "").strip().lower().split())
+        if not norm or len(norm) >= 20:
             continue
-        if any(pattern in text for pattern in patterns):
+        if any(pattern in norm for pattern in patterns):
             try:
                 candidates.nth(idx).click(timeout=3000)
                 page.wait_for_timeout(1500)
@@ -99,31 +99,20 @@ def find_and_click_date_tab(page, day: datetime.date) -> bool:
     return False
 
 
-def leicester_square_has_times(page) -> bool:
-    """After selecting a date, check whether Leicester Square is listed
-    with any bookable times on the current page."""
+def film_has_showtime(page) -> bool:
+    """After selecting a date, check whether the film is listed with a
+    real showtime on the current page."""
     try:
-        cinema_locator = page.get_by_text(re.compile(CINEMA_NAME, re.IGNORECASE)).first
-        if not cinema_locator.is_visible(timeout=3000):
-            return False
+        text = page.locator("body").inner_text(timeout=5000)
     except Exception:
         return False
 
-    # Walk up to a reasonably-sized ancestor container and scan its text
-    # for time-of-day patterns (e.g. "14:30"), which indicate bookable
-    # performances rather than just the cinema's name being present.
-    try:
-        container = cinema_locator.locator(
-            "xpath=ancestor::*[self::section or self::article or self::li or self::div][3]"
-        )
-        text = container.first.inner_text(timeout=3000)
-    except Exception:
-        try:
-            text = page.locator("body").inner_text(timeout=3000)
-        except Exception:
-            return False
-
-    return bool(TIME_PATTERN.search(text))
+    lower = text.lower()
+    idx = lower.find(FILM_MARKER)
+    if idx == -1:
+        return False
+    snippet = text[idx:idx + 300]
+    return bool(TIME_PATTERN.search(snippet))
 
 
 def scrape_available_dates() -> list[str]:
@@ -135,7 +124,7 @@ def scrape_available_dates() -> list[str]:
             "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
         ))
         try:
-            page.goto(FILM_URL, wait_until="domcontentloaded", timeout=30000)
+            page.goto(SOURCE_URL, wait_until="domcontentloaded", timeout=30000)
             print(f"Loaded: {page.url!r} title={page.title()!r}")
             accept_cookies(page)
             try:
@@ -152,15 +141,10 @@ def scrape_available_dates() -> list[str]:
                     "enable javascript and cookies", "cloudflare ray id",
                     "sorry, you have been blocked"]):
                 raise RuntimeError(
-                    "Odeon returned a bot-protection challenge page instead of the film "
-                    f"listing (title={page.title()!r}). The scraper was blocked, not "
-                    "just seeing an empty schedule."
+                    "flicks.co.uk returned a bot-protection challenge page instead of "
+                    f"the listing (title={page.title()!r}). The scraper was blocked, "
+                    "not just seeing an empty schedule."
                 )
-
-            all_clickable = page.locator("button, a, [role=tab], [role=button]")
-            clickable_count = all_clickable.count()
-            sample_texts = [t.strip() for t in all_clickable.all_inner_texts()[:40] if t.strip()]
-            print(f"Found {clickable_count} clickable elements. Sample texts: {sample_texts}")
 
             DEBUG_SCREENSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(DEBUG_SCREENSHOT_PATH), full_page=True)
@@ -171,10 +155,10 @@ def scrape_available_dates() -> list[str]:
                 day = today + datetime.timedelta(days=offset)
                 found_tab = find_and_click_date_tab(page, day)
                 if not found_tab:
-                    # No tab for this day at all -> ODEON hasn't opened
-                    # this day for booking yet anywhere.
+                    # No tab for this day at all -> not open for booking
+                    # yet anywhere on this listing.
                     continue
-                if leicester_square_has_times(page):
+                if film_has_showtime(page):
                     available.append(day.isoformat())
         except Exception:
             try:
@@ -227,7 +211,9 @@ def get_or_create_tracking_issue(state: dict) -> int | None:
             "body": (
                 "This issue tracks newly-released showing dates for "
                 "**The Odyssey** at **ODEON Luxe London Leicester Square**.\n\n"
-                f"Film page: {FILM_URL}\n\n"
+                f"Book here: {BOOKING_URL}\n"
+                f"(Tracked via {SOURCE_URL} since odeon.co.uk blocks automated "
+                "requests.)\n\n"
                 "A new comment is posted here every time new dates go on sale."
             ),
             "labels": [TRACKING_LABEL],
@@ -250,7 +236,7 @@ def notify_new_dates(state: dict, new_dates: list[str]) -> None:
     body = (
         "\U0001F3AC **New Odyssey showings just went on sale at Odeon Leicester Square:**\n\n"
         f"{dates_list}\n\n"
-        f"Book here: {FILM_URL}"
+        f"Book here: {BOOKING_URL}"
     )
     post_comment(issue_number, body)
 
@@ -260,7 +246,7 @@ def notify_error(state: dict, message: str) -> None:
     state["tracking_issue_number"] = issue_number
     post_comment(
         issue_number,
-        "⚠️ The Odyssey ticket checker failed to scrape the ODEON site "
+        "⚠️ The Odyssey ticket checker failed to scrape flicks.co.uk "
         f"(the page structure may have changed):\n\n```\n{message}\n```",
     )
 
