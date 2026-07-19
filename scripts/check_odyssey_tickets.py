@@ -44,8 +44,8 @@ TRACKING_LABEL = "odyssey-tracker"
 def load_state() -> dict:
     if STATE_PATH.exists():
         return json.loads(STATE_PATH.read_text())
-    return {"available_dates": [], "last_checked_utc": None, "last_status": None,
-            "tracking_issue_number": None}
+    return {"available_dates": [], "pending_dates": [], "last_checked_utc": None,
+            "last_status": None, "tracking_issue_number": None}
 
 
 def save_state(state: dict) -> None:
@@ -321,27 +321,35 @@ def main() -> int:
         save_state(state)
         return 1
 
-    previous_dates = set(state.get("available_dates", []))
-    new_dates = sorted(set(current_dates) - previous_dates)
+    today_str = datetime.date.today().isoformat()
+    current_dates = {d for d in current_dates if d >= today_str}
+    previous_dates = {d for d in state.get("available_dates", []) if d >= today_str}
+    pending_dates = {d for d in state.get("pending_dates", []) if d >= today_str}
 
-    if new_dates:
-        print(f"New dates released: {new_dates}")
-        notify_new_dates(state, new_dates)
+    newly_seen = current_dates - previous_dates
+    # A date must show up as available on two separate runs before it's
+    # trusted enough to notify on - the source site has occasionally
+    # shown a real-looking but one-off incorrect date for a day the
+    # cinema's own site didn't actually have on sale, and a single flaky
+    # run can also miss a date it previously confirmed. Requiring
+    # reconfirmation filters stray glitches without meaningfully
+    # delaying genuine releases (worst case, one extra hourly check).
+    confirmed_new = sorted(newly_seen & pending_dates)
+    still_pending = newly_seen - pending_dates
+
+    if confirmed_new:
+        print(f"New dates released (confirmed on 2 consecutive checks): {confirmed_new}")
+        notify_new_dates(state, confirmed_new)
     else:
-        print("No new dates since last check.")
+        print("No new dates confirmed since last check.")
+    if still_pending:
+        print(f"Awaiting reconfirmation next check: {sorted(still_pending)}")
 
     if state.get("last_status") == "error":
         notify_recovered(state)
 
-    # A single run can miss a date it previously confirmed (e.g. a
-    # transient click/timing miss against the source site), so state
-    # accumulates rather than being overwritten - otherwise a date that
-    # temporarily "disappears" and later "reappears" would incorrectly
-    # fire another new-dates notification. Past dates are dropped so the
-    # list doesn't grow forever.
-    today_str = datetime.date.today().isoformat()
-    combined_dates = {d for d in (previous_dates | set(current_dates)) if d >= today_str}
-    state["available_dates"] = sorted(combined_dates)
+    state["available_dates"] = sorted(previous_dates | set(confirmed_new))
+    state["pending_dates"] = sorted(still_pending)
     state["last_status"] = "ok"
     state["last_checked_utc"] = now
     save_state(state)
