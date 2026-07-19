@@ -333,7 +333,15 @@ def main() -> int:
     if state.get("last_status") == "error":
         notify_recovered(state)
 
-    state["available_dates"] = sorted(set(current_dates))
+    # A single run can miss a date it previously confirmed (e.g. a
+    # transient click/timing miss against the source site), so state
+    # accumulates rather than being overwritten - otherwise a date that
+    # temporarily "disappears" and later "reappears" would incorrectly
+    # fire another new-dates notification. Past dates are dropped so the
+    # list doesn't grow forever.
+    today_str = datetime.date.today().isoformat()
+    combined_dates = {d for d in (previous_dates | set(current_dates)) if d >= today_str}
+    state["available_dates"] = sorted(combined_dates)
     state["last_status"] = "ok"
     state["last_checked_utc"] = now
     save_state(state)
