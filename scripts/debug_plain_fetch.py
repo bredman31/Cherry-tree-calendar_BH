@@ -5,41 +5,44 @@ checker? Prints status code and a body snippet; not used by the main
 checker workflow."""
 import requests
 
-URLS = [
-    "https://www.odeon.co.uk/films/the-odyssey-70mm/HO00009035/",
-    "https://www.imdb.com/showtimes/cinema/UK/ci0959835/UK/SG36BN",
-    "https://www.tgimovie.com/uk/cinemas/odeon/london-leicester-square",
-    "https://www.flicks.co.uk/cinema/odeon-cinema-luxe-leicester-square/",
-]
+import re
 
-for url in URLS:
-    print(f"\n=== {url} ===")
-    try:
-        resp = requests.get(
-            url,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
-                ),
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-GB,en;q=0.9",
-            },
-            timeout=20,
-        )
-    except requests.RequestException as exc:
-        print(f"request failed: {exc!r}")
-        continue
-    print(f"status_code={resp.status_code}")
-    print(f"final_url={resp.url}")
-    print(f"content_length={len(resp.text)}")
-    print(f"server_header={resp.headers.get('server')}")
-    lower = resp.text.lower()
-    looks_blocked = any(m in lower for m in
-                         ["attention required", "cloudflare", "captcha", "access denied",
-                          "just a moment", "enable javascript and cookies"])
-    print(f"looks_blocked={looks_blocked}")
-    contains_odyssey = "odyssey" in lower
-    print(f"mentions_odyssey={contains_odyssey}")
-    print("---first 800 chars---")
-    print(resp.text[:800])
+URL = "https://www.flicks.co.uk/cinema/odeon-cinema-luxe-leicester-square/"
+
+resp = requests.get(
+    URL,
+    headers={
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
+    },
+    timeout=20,
+)
+print(f"status_code={resp.status_code}")
+print(f"content_length={len(resp.text)}")
+
+# Look for JSON-LD structured data (schema.org) - the robust, machine-readable option
+ld_blocks = re.findall(
+    r'<script type="application/ld\+json">(.*?)</script>', resp.text, re.DOTALL
+)
+print(f"json_ld_blocks_found={len(ld_blocks)}")
+for i, block in enumerate(ld_blocks):
+    if "odyssey" in block.lower():
+        print(f"\n--- JSON-LD block {i} (mentions odyssey) ---")
+        print(block[:3000])
+
+# Also show raw text context around each "odyssey" mention
+lower = resp.text.lower()
+idx = 0
+count = 0
+while True:
+    idx = lower.find("odyssey", idx)
+    if idx == -1 or count >= 5:
+        break
+    print(f"\n--- context around match {count} (char {idx}) ---")
+    print(resp.text[max(0, idx - 300):idx + 300])
+    idx += 7
+    count += 1
