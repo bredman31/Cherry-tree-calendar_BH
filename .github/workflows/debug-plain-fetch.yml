@@ -26,3 +26,4 @@ jobs:
             data/flicks_render.png
             data/flicks_render.txt
           if-no-files-found: ignore
+      - run: python scripts/debug_flicks_dates.py
