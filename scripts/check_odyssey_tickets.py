@@ -146,9 +146,11 @@ def scrape_available_dates() -> list[str]:
 
             body_text = page.locator("body").inner_text(timeout=5000)
             print(f"Body text length: {len(body_text)} chars")
-            if any(marker in body_text.lower() for marker in
+            challenge_haystack = f"{page.title()}\n{body_text}".lower()
+            if any(marker in challenge_haystack for marker in
                    ["just a moment", "attention required", "checking your browser",
-                    "enable javascript and cookies"]):
+                    "enable javascript and cookies", "cloudflare ray id",
+                    "sorry, you have been blocked"]):
                 raise RuntimeError(
                     "Odeon returned a bot-protection challenge page instead of the film "
                     f"listing (title={page.title()!r}). The scraper was blocked, not "
