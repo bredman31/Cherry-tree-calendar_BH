@@ -15,3 +15,4 @@ jobs:
           pip install playwright
           playwright install --with-deps chromium
       - run: python scripts/debug_ancestor_depth.py
+      - run: python scripts/debug_fresh_aug2.py

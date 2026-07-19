@@ -119,29 +119,48 @@ def find_and_click_date_tab(page, day: datetime.date) -> bool:
 
 def film_has_showtime(page) -> bool:
     """After selecting a date, check whether the film's own listing card
-    (not just nearby page text, e.g. a "trending" nav widget or the next
-    film's card) shows a real showtime. Scopes to the title element's own
-    ancestor container rather than a fixed character window, since a
-    whole-page proximity check can spill into an unrelated film's times
-    on days where this film has no listing at all."""
+    shows a real showtime.
+
+    The page can have more than one "odyssey" text node at once: a
+    "Popular" quick-glance widget (whose showtimes don't reliably track
+    the selected date) plus the real date-scoped listing further down.
+    The real listing card is a tightly isolated element - its inner text
+    stays identical as you climb from 1 to 4 ancestor levels, since there
+    are no sibling cards absorbed along the way. The "Popular" widget's
+    container keeps growing at each level because it sits inside a larger
+    carousel. Only trust a match whose text is stable across that climb.
+    """
     try:
-        title_locator = page.get_by_text(
-            re.compile(FILM_MARKER, re.IGNORECASE)
-        ).first
-        if not title_locator.is_visible(timeout=3000):
-            return False
+        matches = page.get_by_text(re.compile(FILM_MARKER, re.IGNORECASE))
+        count = matches.count()
     except Exception:
         return False
 
-    try:
-        container = title_locator.locator(
-            "xpath=ancestor::*[self::li or self::article or self::section or self::div][2]"
-        )
-        text = container.first.inner_text(timeout=3000)
-    except Exception:
-        return False
+    for i in range(count):
+        title_locator = matches.nth(i)
+        try:
+            if not title_locator.is_visible(timeout=2000):
+                continue
+            container = title_locator.locator(
+                "xpath=ancestor::*[self::li or self::article or self::section or self::div][1]"
+            )
+            depth1_text = container.first.inner_text(timeout=2000)
+            container4 = title_locator.locator(
+                "xpath=ancestor::*[self::li or self::article or self::section or self::div][4]"
+            )
+            depth4_text = container4.first.inner_text(timeout=2000)
+        except Exception:
+            continue
 
-    return bool(TIME_PATTERN.search(text))
+        if depth1_text != depth4_text:
+            # Text kept growing as we climbed ancestors -> this is inside
+            # a larger carousel (e.g. "Popular"), not an isolated card.
+            continue
+
+        if TIME_PATTERN.search(depth1_text):
+            return True
+
+    return False
 
 
 def scrape_available_dates() -> list[str]:
