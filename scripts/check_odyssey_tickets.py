@@ -118,19 +118,30 @@ def find_and_click_date_tab(page, day: datetime.date) -> bool:
 
 
 def film_has_showtime(page) -> bool:
-    """After selecting a date, check whether the film is listed with a
-    real showtime on the current page."""
+    """After selecting a date, check whether the film's own listing card
+    (not just nearby page text, e.g. a "trending" nav widget or the next
+    film's card) shows a real showtime. Scopes to the title element's own
+    ancestor container rather than a fixed character window, since a
+    whole-page proximity check can spill into an unrelated film's times
+    on days where this film has no listing at all."""
     try:
-        text = page.locator("body").inner_text(timeout=5000)
+        title_locator = page.get_by_text(
+            re.compile(FILM_MARKER, re.IGNORECASE)
+        ).first
+        if not title_locator.is_visible(timeout=3000):
+            return False
     except Exception:
         return False
 
-    lower = text.lower()
-    idx = lower.find(FILM_MARKER)
-    if idx == -1:
+    try:
+        container = title_locator.locator(
+            "xpath=ancestor::*[self::li or self::article or self::section or self::div][2]"
+        )
+        text = container.first.inner_text(timeout=3000)
+    except Exception:
         return False
-    snippet = text[idx:idx + 300]
-    return bool(TIME_PATTERN.search(snippet))
+
+    return bool(TIME_PATTERN.search(text))
 
 
 def scrape_available_dates() -> list[str]:
