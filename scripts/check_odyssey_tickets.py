@@ -54,8 +54,9 @@ def save_state(state: dict) -> None:
 
 def date_match_patterns(day: datetime.date) -> list[str]:
     return [
-        day.strftime("%a %-d").lower(),        # "fri 24"
-        day.strftime("%-d %b").lower(),        # "24 jul"
+        day.strftime("%a %-d %b").lower(),     # "fri 24 jul" - full, exact-match preferred
+        day.strftime("%a %-d").lower(),        # "fri 24" - loose fallback
+        day.strftime("%-d %b").lower(),        # "24 jul" - loose fallback
     ]
 
 
@@ -79,23 +80,40 @@ def accept_cookies(page) -> None:
             continue
 
 
+def _click_candidate(page, candidates, idx: int) -> bool:
+    try:
+        candidates.nth(idx).click(timeout=3000)
+    except Exception:
+        return False
+    try:
+        page.wait_for_load_state("networkidle", timeout=5000)
+    except PlaywrightTimeoutError:
+        pass
+    page.wait_for_timeout(1500)
+    return True
+
+
 def find_and_click_date_tab(page, day: datetime.date) -> bool:
     """Try to find a clickable element representing `day` and click it.
-    Returns True if a matching tab was found and clicked."""
-    patterns = date_match_patterns(day)
+    Returns True if a matching tab was found and clicked. Prefers an
+    exact full-date match (e.g. "fri 24 jul") over a loose substring
+    match, to avoid accidentally clicking an unrelated element whose
+    text happens to contain a shorter date fragment."""
+    full_pattern, *loose_patterns = date_match_patterns(day)
     candidates = page.locator("button, a, [role=tab], [role=button], li")
     texts = candidates.all_inner_texts()
-    for idx, text in enumerate(texts):
-        norm = " ".join((text or "").strip().lower().split())
+    normalized = [" ".join((t or "").strip().lower().split()) for t in texts]
+
+    exact_matches = [i for i, norm in enumerate(normalized) if norm == full_pattern]
+    if len(exact_matches) == 1:
+        return _click_candidate(page, candidates, exact_matches[0])
+
+    for idx, norm in enumerate(normalized):
         if not norm or len(norm) >= 20:
             continue
-        if any(pattern in norm for pattern in patterns):
-            try:
-                candidates.nth(idx).click(timeout=3000)
-                page.wait_for_timeout(1500)
+        if any(pattern in norm for pattern in loose_patterns):
+            if _click_candidate(page, candidates, idx):
                 return True
-            except Exception:
-                continue
     return False
 
 
