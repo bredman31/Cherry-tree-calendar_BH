@@ -13,3 +13,16 @@ jobs:
           python-version: "3.12"
       - run: pip install requests
       - run: python scripts/debug_plain_fetch.py
+
+      - run: |
+          pip install playwright
+          playwright install --with-deps chromium
+      - run: python scripts/debug_flicks_render.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flicks-render-debug
+          path: |
+            data/flicks_render.png
+            data/flicks_render.txt
+          if-no-files-found: ignore
