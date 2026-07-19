@@ -149,7 +149,11 @@ def scrape_available_dates() -> list[str]:
             if any(marker in body_text.lower() for marker in
                    ["just a moment", "attention required", "checking your browser",
                     "enable javascript and cookies"]):
-                print("WARNING: page looks like a bot-protection challenge page, not the real content")
+                raise RuntimeError(
+                    "Odeon returned a bot-protection challenge page instead of the film "
+                    f"listing (title={page.title()!r}). The scraper was blocked, not "
+                    "just seeing an empty schedule."
+                )
 
             all_clickable = page.locator("button, a, [role=tab], [role=button]")
             clickable_count = all_clickable.count()
