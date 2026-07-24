@@ -1,6 +1,5 @@
 {
   "available_dates": [
-    "2026-07-23",
     "2026-07-24",
     "2026-07-25",
     "2026-07-26",
@@ -8,8 +7,8 @@
     "2026-07-28",
     "2026-07-30"
   ],
-  "last_checked_utc": "2026-07-23T23:03:51.690868+00:00",
-  "last_status": "error",
+  "last_checked_utc": "2026-07-24T03:27:17.054498+00:00",
+  "last_status": "ok",
   "pending_dates": [],
   "tracking_issue_number": 3
 }
