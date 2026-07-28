@@ -1,10 +1,9 @@
 {
   "available_dates": [
-    "2026-07-27",
     "2026-07-28",
     "2026-07-30"
   ],
-  "last_checked_utc": "2026-07-27T23:11:23.497356+00:00",
+  "last_checked_utc": "2026-07-28T03:18:34.535413+00:00",
   "last_status": "ok",
   "pending_dates": [],
   "tracking_issue_number": 3
