@@ -12,8 +12,10 @@
     "2026-08-24",
     "2026-08-25"
   ],
-  "last_checked_utc": "2026-08-07T22:44:47.097781+00:00",
+  "last_checked_utc": "2026-08-07T23:39:32.474850+00:00",
   "last_status": "ok",
-  "pending_dates": [],
+  "pending_dates": [
+    "2026-08-07"
+  ],
   "tracking_issue_number": 3
 }
