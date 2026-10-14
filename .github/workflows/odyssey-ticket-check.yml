@@ -1,8 +1,9 @@
 name: Odyssey ticket tracker
 
+# Scheduled hourly checks retired 2026-10-14 - The Odyssey's cinema run
+# has ended, so there's nothing left to track. workflow_dispatch is kept
+# so this can still be run manually if ever needed again.
 on:
-  schedule:
-    - cron: "0 * * * *"
   workflow_dispatch: {}
 
 permissions:
